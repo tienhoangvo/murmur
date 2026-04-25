@@ -197,6 +197,55 @@ export class Renderer {
     if (el.strokeWidth > 0) ctx.stroke();
   }
 
+  private drawText(el: TextElement) {
+    const ctx = this.ctx;
+
+    // background
+    if (el.fillColor !== "transparent") {
+      ctx.fillStyle = el.fillColor;
+      this.roundRect(el.x, el.y, el.width, el.height, 4);
+      ctx.fill();
+    }
+
+    // border
+    if (el.strokeWidth > 0 && el.strokeColor !== "transparent") {
+      ctx.strokeStyle = el.strokeColor;
+      ctx.lineWidth = el.strokeWidth;
+      this.applyStrokeStyle(el.strokeStyle);
+      this.roundRect(el.x, el.y, el.width, el.height, 4);
+      ctx.stroke();
+      this.resetStrokeStyle();
+    }
+
+    // text
+    if (this.editingId !== el.id && el.content) {
+      ctx.fillStyle = el.color;
+      ctx.font = `${el.fontWeight} ${el.fontSize}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = el.align as CanvasTextAlign;
+      ctx.textBaseline = "top";
+
+      const textX =
+        el.align === "center"
+          ? el.x + el.width / 2
+          : el.align === "right"
+            ? el.x + el.width - 8
+            : el.x + 8;
+
+      // clip text vertically
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(el.x, el.y, el.width, el.height);
+      ctx.clip();
+      this.drawWrappedText(
+        el.content,
+        textX,
+        el.y + 8,
+        el.width - 16,
+        el.fontSize * 1.4,
+      );
+      ctx.restore();
+    }
+  }
   private drawFreehand(el: FreehandElement) {
     const ctx = this.ctx;
     const points = el.points;

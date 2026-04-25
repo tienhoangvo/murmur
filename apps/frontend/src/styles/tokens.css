@@ -1,0 +1,137 @@
+:root {
+  /* ── Brand ───────────────────────────────── */
+  --color-brand-50: hsl(248 90% 97%);
+  --color-brand-100: hsl(248 85% 93%);
+  --color-brand-200: hsl(248 75% 85%);
+  --color-brand-400: hsl(248 65% 65%);
+  --color-brand-600: hsl(248 60% 50%);
+  --color-brand-800: hsl(248 60% 32%);
+  --color-brand-900: hsl(248 60% 20%);
+
+  /* ── Neutrals ────────────────────────────── */
+  --color-gray-0: hsl(0 0% 100%);
+  --color-gray-50: hsl(220 20% 97%);
+  --color-gray-100: hsl(220 15% 93%);
+  --color-gray-200: hsl(220 12% 86%);
+  --color-gray-300: hsl(220 10% 74%);
+  --color-gray-400: hsl(220 8% 58%);
+  --color-gray-500: hsl(220 7% 44%);
+  --color-gray-600: hsl(220 8% 32%);
+  --color-gray-700: hsl(220 10% 22%);
+  --color-gray-800: hsl(220 12% 14%);
+  --color-gray-900: hsl(220 15% 8%);
+
+  /* ── Semantic ────────────────────────────── */
+  --color-success: hsl(152 60% 40%);
+  --color-warning: hsl(38 90% 50%);
+  --color-danger: hsl(0 70% 55%);
+  --color-info: hsl(210 80% 52%);
+
+  /* ── Sticky note colors ──────────────────── */
+  --sticky-yellow: hsl(48 95% 76%);
+  --sticky-pink: hsl(340 85% 82%);
+  --sticky-blue: hsl(210 85% 78%);
+  --sticky-green: hsl(152 60% 74%);
+  --sticky-purple: hsl(270 70% 80%);
+  --sticky-orange: hsl(28 90% 74%);
+
+  /* ── Surface (light mode) ────────────────── */
+  --surface-app: var(--color-gray-50);
+  --surface-panel: var(--color-gray-0);
+  --surface-overlay: var(--color-gray-0);
+  --surface-canvas: hsl(220 20% 94%);
+
+  /* ── Text (light mode) ───────────────────── */
+  --text-primary: var(--color-gray-900);
+  --text-secondary: var(--color-gray-500);
+  --text-disabled: var(--color-gray-300);
+  --text-inverse: var(--color-gray-0);
+  --text-brand: var(--color-brand-600);
+
+  /* ── Border ──────────────────────────────── */
+  --border-subtle: var(--color-gray-100);
+  --border-default: var(--color-gray-200);
+  --border-strong: var(--color-gray-300);
+
+  /* ── Spacing ─────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Typography ──────────────────────────── */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-loose: 1.75;
+
+  /* ── Radius ──────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ── Shadow ──────────────────────────────── */
+  --shadow-sm: 0 1px 2px hsl(220 15% 8% / 0.06);
+  --shadow-md: 0 4px 12px hsl(220 15% 8% / 0.1);
+  --shadow-lg: 0 8px 24px hsl(220 15% 8% / 0.14);
+  --shadow-xl: 0 16px 40px hsl(220 15% 8% / 0.18);
+
+  /* ── Transitions ─────────────────────────── */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 350ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Canvas specific ─────────────────────── */
+  --canvas-grid-color: hsl(220 12% 86% / 0.8);
+  --canvas-selection: hsl(248 65% 65%);
+  --canvas-selection-fill: hsl(248 65% 65% / 0.1);
+  --canvas-handle-size: 8px;
+}
+
+/* ── Dark mode ───────────────────────────────── */
+[data-theme="dark"] {
+  --surface-app: var(--color-gray-900);
+  --surface-panel: var(--color-gray-800);
+  --surface-overlay: var(--color-gray-700);
+  --surface-canvas: hsl(220 15% 11%);
+
+  --text-primary: var(--color-gray-50);
+  --text-secondary: var(--color-gray-400);
+  --text-disabled: var(--color-gray-600);
+  --text-inverse: var(--color-gray-900);
+  --text-brand: var(--color-brand-400);
+
+  --border-subtle: var(--color-gray-700);
+  --border-default: var(--color-gray-600);
+  --border-strong: var(--color-gray-500);
+
+  --canvas-grid-color: hsl(220 12% 22% / 0.8);
+
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.2);
+  --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.3);
+  --shadow-lg: 0 8px 24px hsl(0 0% 0% / 0.4);
+  --shadow-xl: 0 16px 40px hsl(0 0% 0% / 0.5);
+}

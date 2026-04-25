@@ -51,6 +51,7 @@ export class InputHandler {
     onDirty: () => void,
     boardId: string,
     userId: string,
+    private onDblClickElement?: (element: CanvasElement) => void,
   ) {
     this.canvas = canvas;
     this.viewport = viewport;
@@ -285,8 +286,18 @@ export class InputHandler {
     this.onDirty();
   };
 
-  private onDblClick = () => {
-    // TODO: open text editor
+  private onDblClick = (e: MouseEvent) => {
+    const worldPos = this.viewport.eventToWorld(e);
+    const { elements, zOrder } = getBoardState();
+    const hit = this.hitTester.hitTest(
+      worldPos.x,
+      worldPos.y,
+      Object.values(elements),
+      zOrder,
+    );
+    if (hit && this.onDblClickElement) {
+      this.onDblClickElement(hit.element);
+    }
   };
 
   updateCursor() {

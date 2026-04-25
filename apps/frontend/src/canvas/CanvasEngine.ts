@@ -4,6 +4,7 @@ import { HitTester } from "./HitTester";
 import { InputHandler } from "./InputHandler";
 import { SelectionManager } from "./SelectionManager";
 import { getBoardState } from "../store/boardStore";
+import type { CanvasElement } from "@murmur/shared";
 
 export class CanvasEngine {
   private viewport: Viewport;
@@ -20,6 +21,7 @@ export class CanvasEngine {
     private overlayCanvas: HTMLCanvasElement,
     private boardId: string,
     private userId: string,
+    private onDblClick?: (element: CanvasElement) => void,
   ) {
     const ctx = canvas.getContext("2d")!;
     this.setupDpr(canvas);
@@ -35,6 +37,7 @@ export class CanvasEngine {
       () => this.markDirty(),
       boardId,
       userId,
+      this.onDblClick,
     );
     this.selectionManager = new SelectionManager();
 

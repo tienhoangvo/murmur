@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { CanvasEngine } from "../canvas/CanvasEngine";
 import { getCurrentUser } from "../api/me";
 import styles from "./BoardCanvas.module.css";
+import { useBoardStore } from "@/store/boardStore";
 
 interface Props {
   boardId: string;
@@ -33,10 +34,13 @@ export function BoardCanvas({ boardId, role }: Props) {
     };
   }, [boardId]);
 
-  // mark dirty when board state changes
+  // mark dirty whenever elements change
   useEffect(() => {
-    engineRef.current?.markDirty();
-  });
+    const unsub = useBoardStore.subscribe(() => {
+      engineRef.current?.markDirty();
+    });
+    return unsub;
+  }, []);
 
   const isReadOnly = role === "viewer";
 

@@ -1,0 +1,28 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# copy workspace files
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/backend/package.json ./apps/backend/
+
+# install pnpm
+RUN npm install -g pnpm
+
+# install dependencies
+RUN pnpm install --frozen-lockfile
+
+# copy source
+COPY packages/shared ./packages/shared
+COPY apps/backend ./apps/backend
+COPY tsconfig.base.json ./
+
+# build
+RUN pnpm --filter @murmur/backend build
+
+WORKDIR /app/apps/backend
+
+EXPOSE 3001
+
+CMD ["node", "dist/index.js"]

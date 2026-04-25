@@ -1,15 +1,24 @@
 import type {
   CanvasElement,
-  StickyNoteElement,
-  TextBoxElement,
   ShapeElement,
+  TextElement,
   ArrowElement,
+  FreehandElement,
+  ShapeKind,
 } from "@murmur/shared";
 
-type Tool = "sticky_note" | "text_box" | "shape" | "arrow";
+type CreationTool =
+  | "rect"
+  | "square"
+  | "ellipse"
+  | "circle"
+  | "cloud"
+  | "arrow"
+  | "text"
+  | "freehand";
 
 export function createElement(
-  tool: Tool,
+  tool: CreationTool,
   x: number,
   y: number,
   boardId: string,
@@ -29,21 +38,28 @@ export function createElement(
   };
 
   switch (tool) {
-    case "sticky_note":
+    case "rect":
+    case "square":
+    case "ellipse":
+    case "circle":
+    case "cloud":
       return {
         ...base,
-        type: "sticky_note",
-        width: 200,
-        height: 200,
-        content: "",
-        color: randomStickyColor(),
-        fontSize: 14,
-      } satisfies StickyNoteElement;
+        type: "shape",
+        kind: tool as ShapeKind,
+        width: 160,
+        height: 160,
+        fillColor: "hsl(0 0% 100%)",
+        strokeColor: "hsl(220 10% 74%)",
+        strokeWidth: 1,
+        strokeStyle: "solid",
+        ...(tool === "cloud" && { cloudArcs: 6, cloudArcSize: 0.5 }),
+      } satisfies ShapeElement;
 
-    case "text_box":
+    case "text":
       return {
         ...base,
-        type: "text_box",
+        type: "text",
         width: 200,
         height: 60,
         content: "",
@@ -51,19 +67,11 @@ export function createElement(
         fontWeight: "normal",
         align: "left",
         color: "hsl(220 15% 15%)",
-      } satisfies TextBoxElement;
-
-    case "shape":
-      return {
-        ...base,
-        type: "shape",
-        width: 160,
-        height: 160,
-        shape: "rect",
-        fillColor: "hsl(248 65% 65% / 0.15)",
-        strokeColor: "hsl(248 65% 65%)",
-        strokeWidth: 2,
-      } satisfies ShapeElement;
+        fillColor: "transparent",
+        strokeColor: "transparent",
+        strokeWidth: 0,
+        strokeStyle: "solid",
+      } satisfies TextElement;
 
     case "arrow":
       return {
@@ -77,21 +85,22 @@ export function createElement(
         ],
         strokeColor: "hsl(220 15% 30%)",
         strokeWidth: 2,
+        strokeStyle: "solid",
         startCap: "none",
         endCap: "arrow",
       } satisfies ArrowElement;
+
+    case "freehand":
+      return {
+        ...base,
+        type: "freehand",
+        width: 0,
+        height: 0,
+        points: [{ x, y }],
+        strokeColor: "hsl(220 15% 30%)",
+        strokeWidth: 2,
+        strokeStyle: "solid",
+        opacity: 1,
+      } satisfies FreehandElement;
   }
-}
-
-const STICKY_COLORS = [
-  "yellow",
-  "pink",
-  "blue",
-  "green",
-  "purple",
-  "orange",
-] as const;
-
-function randomStickyColor() {
-  return STICKY_COLORS[Math.floor(Math.random() * STICKY_COLORS.length)]!;
 }

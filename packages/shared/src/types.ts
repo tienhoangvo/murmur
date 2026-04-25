@@ -46,50 +46,67 @@ export interface BaseElement {
   updatedAt: string;
 }
 
-export interface StickyNoteElement extends BaseElement {
-  type: "sticky_note";
-  content: string;
-  color: StickyColor;
-  fontSize: number;
+// ─── Shape types ─────────────────────────────────────────────────────────────
+
+export type ShapeKind = "rect" | "square" | "ellipse" | "circle" | "cloud";
+
+export interface ShapeElement extends BaseElement {
+  type: "shape";
+  kind: ShapeKind;
+  fillColor: string;
+  strokeColor: string;
+  strokeWidth: number;
+  strokeStyle: "solid" | "dashed" | "dotted";
+  // cloud specific
+  cloudArcs?: number; // number of arcs (3–12), default 6
+  cloudArcSize?: number; // arc roundness (0.1–1.0), default 0.5
 }
 
-export interface TextBoxElement extends BaseElement {
-  type: "text_box";
+// ─── Text ────────────────────────────────────────────────────────────────────
+
+export interface TextElement extends BaseElement {
+  type: "text";
   content: string;
   fontSize: number;
   fontWeight: "normal" | "bold";
   align: "left" | "center" | "right";
   color: string;
+  fillColor: string; // background, default transparent
+  strokeColor: string; // border, default transparent
+  strokeWidth: number;
+  strokeStyle: "solid" | "dashed" | "dotted";
 }
 
-export interface ShapeElement extends BaseElement {
-  type: "shape";
-  shape: "rect" | "ellipse" | "triangle" | "diamond";
-  fillColor: string;
-  strokeColor: string;
-  strokeWidth: number;
-}
+// ─── Arrow ───────────────────────────────────────────────────────────────────
 
 export interface ArrowElement extends BaseElement {
   type: "arrow";
   points: Point[];
   strokeColor: string;
   strokeWidth: number;
+  strokeStyle: "solid" | "dashed" | "dotted";
   startCap: ArrowCap;
   endCap: ArrowCap;
 }
 
-export interface ImageElement extends BaseElement {
-  type: "image";
-  url: string;
+// ─── Freehand ────────────────────────────────────────────────────────────────
+
+export interface FreehandElement extends BaseElement {
+  type: "freehand";
+  points: Point[]; // raw path points
+  strokeColor: string;
+  strokeWidth: number;
+  strokeStyle: "solid" | "dashed" | "dotted";
+  opacity: number; // 0–1
 }
 
+// ─── Union ───────────────────────────────────────────────────────────────────
+
 export type CanvasElement =
-  | StickyNoteElement
-  | TextBoxElement
   | ShapeElement
+  | TextElement
   | ArrowElement
-  | ImageElement;
+  | FreehandElement;
 
 export type ElementType = CanvasElement["type"];
 
@@ -99,14 +116,6 @@ export interface Point {
   x: number;
   y: number;
 }
-
-export type StickyColor =
-  | "yellow"
-  | "pink"
-  | "blue"
-  | "green"
-  | "purple"
-  | "orange";
 
 export type ArrowCap = "none" | "arrow" | "dot";
 

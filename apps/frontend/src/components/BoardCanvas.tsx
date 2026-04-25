@@ -43,10 +43,9 @@ export function BoardCanvas({ boardId, role }: Props) {
       userId,
       // callback when user double-clicks an element
       (element: CanvasElement) => {
-        if (element.type !== "sticky_note" && element.type !== "text_box")
-          return;
-        const content = "content" in element ? element.content : "";
-        const fontSize = "fontSize" in element ? element.fontSize : 14;
+        if (element.type !== "text") return;
+        const content = element.content;
+        const fontSize = element.fontSize;
 
         // read viewport directly from store — not from closed-over React state
         const vp = useViewportStore.getState();

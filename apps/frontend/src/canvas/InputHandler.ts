@@ -11,7 +11,16 @@ import {
 import { createElement } from "./ElementFactory";
 import type { CanvasElement, ArrowElement } from "@murmur/shared";
 
-type Tool = "select" | "sticky_note" | "text_box" | "shape" | "arrow" | "image";
+type Tool =
+  | "select"
+  | "rect"
+  | "square"
+  | "ellipse"
+  | "circle"
+  | "cloud"
+  | "arrow"
+  | "text"
+  | "freehand";
 
 interface DragState {
   isDragging: boolean;
@@ -157,7 +166,7 @@ export class InputHandler {
       return;
     }
 
-    if (tool !== "select" && tool !== "image") {
+    if (tool !== "select") {
       const element = createElement(
         tool,
         worldPos.x,
@@ -604,11 +613,14 @@ export class InputHandler {
     const tool = getSelectionState().activeTool as Tool;
     const cursors: Record<Tool, string> = {
       select: "default",
-      sticky_note: "crosshair",
-      text_box: "text",
-      shape: "crosshair",
+      rect: "crosshair",
+      square: "crosshair",
+      ellipse: "crosshair",
+      circle: "crosshair",
+      cloud: "crosshair",
       arrow: "crosshair",
-      image: "crosshair",
+      text: "text",
+      freehand: "crosshair",
     };
     this.canvas.style.cursor = cursors[tool];
   }

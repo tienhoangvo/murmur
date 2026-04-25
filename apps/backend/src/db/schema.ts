@@ -16,11 +16,10 @@ import {
 export const roleEnum = pgEnum("role", ["owner", "editor", "viewer"]);
 
 export const elementTypeEnum = pgEnum("element_type", [
-  "sticky_note",
-  "text_box",
   "shape",
+  "text",
   "arrow",
-  "image",
+  "freehand",
 ]);
 
 // ─── Users ───────────────────────────────────────────────────────────────────

@@ -13,7 +13,6 @@ import { BoardCanvas } from "../components/BoardCanvas";
 import { Toolbar } from "../components/Toolbar";
 import { CursorOverlay } from "../components/CursorOverlay";
 import styles from "./BoardPage.module.css";
-import { ContextToolbar } from "@/components/ContextToolbar";
 
 export function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
@@ -80,7 +79,6 @@ export function BoardPage() {
       </header>
 
       <div className={styles.canvasWrapper}>
-        <ContextToolbar />
         <Toolbar />
         <BoardCanvas boardId={boardId!} role={data.role} />
         <CursorOverlay />

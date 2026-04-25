@@ -1,10 +1,11 @@
 import type {
   CanvasElement,
-  StickyNoteElement,
-  TextBoxElement,
   ShapeElement,
+  TextElement,
   ArrowElement,
+  FreehandElement,
 } from "@murmur/shared";
+
 import type { Viewport } from "./Viewport";
 import { getSelectionState, getMarqueeBounds } from "../store/selectionStore";
 
@@ -107,80 +108,21 @@ export class Renderer {
     }
 
     switch (el.type) {
-      case "sticky_note":
-        this.drawStickyNote(el);
-        break;
-      case "text_box":
-        this.drawTextBox(el);
-        break;
       case "shape":
         this.drawShape(el);
+        break;
+      case "text":
+        this.drawText(el);
         break;
       case "arrow":
         this.drawArrow(el);
         break;
-      case "image":
-        break; // handled separately
+      case "freehand":
+        this.drawFreehand(el);
+        break;
     }
 
     ctx.restore();
-  }
-
-  private drawStickyNote(el: StickyNoteElement) {
-    const ctx = this.ctx;
-    const color = STICKY_COLORS[el.color] ?? STICKY_COLORS["yellow"]!;
-
-    // shadow
-    ctx.shadowColor = "hsl(0 0% 0% / 0.12)";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 2;
-
-    // background
-    ctx.fillStyle = color!;
-    this.roundRect(el.x, el.y, el.width, el.height, 4);
-    ctx.fill();
-
-    ctx.shadowColor = "transparent";
-
-    // text
-    if (this.editingId !== el.id) {
-      ctx.fillStyle = "hsl(220 15% 15%)";
-      ctx.font = `${el.fontSize}px Inter, system-ui, sans-serif`;
-      ctx.textBaseline = "top";
-      this.drawWrappedText(
-        el.content,
-        el.x + 12,
-        el.y + 12,
-        el.width - 24,
-        el.fontSize * 1.4,
-      );
-    }
-  }
-
-  private drawTextBox(el: TextBoxElement) {
-    const ctx = this.ctx;
-
-    if (this.editingId !== el.id) {
-      ctx.fillStyle = el.color;
-      ctx.font = `${el.fontWeight} ${el.fontSize}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = el.align as CanvasTextAlign;
-      ctx.textBaseline = "top";
-
-      const textX =
-        el.align === "center"
-          ? el.x + el.width / 2
-          : el.align === "right"
-            ? el.x + el.width
-            : el.x;
-
-      this.drawWrappedText(
-        el.content,
-        textX,
-        el.y,
-        el.width,
-        el.fontSize * 1.4,
-      );
-    }
   }
 
   private drawShape(el: ShapeElement) {
@@ -189,15 +131,18 @@ export class Renderer {
     ctx.fillStyle = el.fillColor;
     ctx.strokeStyle = el.strokeColor;
     ctx.lineWidth = el.strokeWidth;
+    this.applyStrokeStyle(el.strokeStyle);
 
-    switch (el.shape) {
+    switch (el.kind) {
       case "rect":
+      case "square":
         this.roundRect(el.x, el.y, el.width, el.height, 4);
         ctx.fill();
         if (el.strokeWidth > 0) ctx.stroke();
         break;
 
       case "ellipse":
+      case "circle":
         ctx.beginPath();
         ctx.ellipse(
           el.x + el.width / 2,
@@ -212,27 +157,135 @@ export class Renderer {
         if (el.strokeWidth > 0) ctx.stroke();
         break;
 
-      case "triangle":
-        ctx.beginPath();
-        ctx.moveTo(el.x + el.width / 2, el.y);
-        ctx.lineTo(el.x + el.width, el.y + el.height);
-        ctx.lineTo(el.x, el.y + el.height);
-        ctx.closePath();
-        ctx.fill();
-        if (el.strokeWidth > 0) ctx.stroke();
-        break;
-
-      case "diamond":
-        ctx.beginPath();
-        ctx.moveTo(el.x + el.width / 2, el.y);
-        ctx.lineTo(el.x + el.width, el.y + el.height / 2);
-        ctx.lineTo(el.x + el.width / 2, el.y + el.height);
-        ctx.lineTo(el.x, el.y + el.height / 2);
-        ctx.closePath();
-        ctx.fill();
-        if (el.strokeWidth > 0) ctx.stroke();
+      case "cloud":
+        this.drawCloud(el);
         break;
     }
+
+    this.resetStrokeStyle();
+  }
+
+  private drawCloud(el: ShapeElement) {
+    const ctx = this.ctx;
+    const arcs = el.cloudArcs ?? 6;
+    const arcSize = el.cloudArcSize ?? 0.5;
+    const { x, y, width, height } = el;
+
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const rx = width / 2;
+    const ry = height / 2;
+
+    ctx.beginPath();
+
+    for (let i = 0; i < arcs; i++) {
+      const startAngle = (i / arcs) * Math.PI * 2;
+      const endAngle = ((i + 1) / arcs) * Math.PI * 2;
+      const midAngle = (startAngle + endAngle) / 2;
+
+      const bumpX = cx + Math.cos(midAngle) * rx * (1 + arcSize * 0.3);
+      const bumpY = cy + Math.sin(midAngle) * ry * (1 + arcSize * 0.3);
+      const bumpR = Math.min(rx, ry) * arcSize * 0.6;
+
+      ctx.arc(bumpX, bumpY, bumpR, midAngle + Math.PI, midAngle, false);
+    }
+
+    ctx.closePath();
+    ctx.fill();
+    if (el.strokeWidth > 0) ctx.stroke();
+  }
+
+  private applyStrokeStyle(style: "solid" | "dashed" | "dotted") {
+    const ctx = this.ctx;
+    switch (style) {
+      case "dashed":
+        ctx.setLineDash([8, 4]);
+        break;
+      case "dotted":
+        ctx.setLineDash([2, 4]);
+        break;
+      default:
+        ctx.setLineDash([]);
+        break;
+    }
+  }
+
+  private resetStrokeStyle() {
+    this.ctx.setLineDash([]);
+  }
+
+  private drawText(el: TextElement) {
+    const ctx = this.ctx;
+
+    // background
+    if (el.fillColor !== "transparent") {
+      ctx.fillStyle = el.fillColor;
+      this.roundRect(el.x, el.y, el.width, el.height, 4);
+      ctx.fill();
+    }
+
+    // border
+    if (el.strokeWidth > 0 && el.strokeColor !== "transparent") {
+      ctx.strokeStyle = el.strokeColor;
+      ctx.lineWidth = el.strokeWidth;
+      this.applyStrokeStyle(el.strokeStyle);
+      this.roundRect(el.x, el.y, el.width, el.height, 4);
+      ctx.stroke();
+      this.resetStrokeStyle();
+    }
+
+    // text
+    if (this.editingId !== el.id && el.content) {
+      ctx.fillStyle = el.color;
+      ctx.font = `${el.fontWeight} ${el.fontSize}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = el.align as CanvasTextAlign;
+      ctx.textBaseline = "top";
+
+      const textX =
+        el.align === "center"
+          ? el.x + el.width / 2
+          : el.align === "right"
+            ? el.x + el.width - 8
+            : el.x + 8;
+
+      // clip text vertically
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(el.x, el.y, el.width, el.height);
+      ctx.clip();
+      this.drawWrappedText(
+        el.content,
+        textX,
+        el.y + 8,
+        el.width - 16,
+        el.fontSize * 1.4,
+      );
+      ctx.restore();
+    }
+  }
+
+  private drawFreehand(el: FreehandElement) {
+    const ctx = this.ctx;
+    const points = el.points;
+    if (points.length < 2) return;
+
+    ctx.save();
+    ctx.globalAlpha = el.opacity;
+    ctx.strokeStyle = el.strokeColor;
+    ctx.lineWidth = el.strokeWidth;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    this.applyStrokeStyle(el.strokeStyle);
+
+    ctx.beginPath();
+    ctx.moveTo(points[0]!.x, points[0]!.y);
+    for (let i = 1; i < points.length; i++) {
+      const p = points[i]!;
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    this.resetStrokeStyle();
+    ctx.restore();
   }
 
   private drawArrow(el: ArrowElement) {
@@ -244,6 +297,7 @@ export class Renderer {
     ctx.lineWidth = el.strokeWidth;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    this.applyStrokeStyle(el.strokeStyle);
 
     ctx.beginPath();
     const first = points[0]!;
@@ -252,6 +306,8 @@ export class Renderer {
       ctx.lineTo(points[i]!.x, points[i]!.y);
     }
     ctx.stroke();
+
+    this.resetStrokeStyle();
 
     // draw arrowhead at end
     if (el.endCap === "arrow") {

@@ -41,6 +41,19 @@ export class HitTester {
   ): ResizeHandle | null {
     if (element.type === "arrow") return null;
 
+    const cx = element.x + element.width / 2;
+    const cy = element.y + element.height / 2;
+
+    // transform mouse into element's local space
+    if (element.rotation !== 0) {
+      const cos = Math.cos(-element.rotation);
+      const sin = Math.sin(-element.rotation);
+      const dx = x - cx;
+      const dy = y - cy;
+      x = cx + dx * cos - dy * sin;
+      y = cy + dx * sin + dy * cos;
+    }
+
     const handles = this.getHandlePositions(element);
     const size = HANDLE_SIZE / scale;
 
@@ -55,6 +68,35 @@ export class HitTester {
       }
     }
     return null;
+  }
+
+  hitTestRotateHandle(
+    x: number,
+    y: number,
+    element: CanvasElement,
+    scale: number,
+  ): boolean {
+    if (element.type === "arrow") return false;
+
+    const cx = element.x + element.width / 2;
+    const cy = element.y + element.height / 2;
+
+    // transform the mouse point into the element's local (unrotated) space
+    if (element.rotation !== 0) {
+      const cos = Math.cos(-element.rotation);
+      const sin = Math.sin(-element.rotation);
+      const dx = x - cx;
+      const dy = y - cy;
+      x = cx + dx * cos - dy * sin;
+      y = cy + dx * sin + dy * cos;
+    }
+
+    // now hit test in local space
+    const rotateX = element.x + element.width / 2;
+    const rotateY = element.y - 24 / scale;
+    const size = 8 / scale / 2 + 4 / scale;
+
+    return Math.hypot(x - rotateX, y - rotateY) <= size;
   }
 
   // test all elements against a marquee rect

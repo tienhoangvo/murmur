@@ -1,5 +1,5 @@
 import type { Viewport } from "./Viewport";
-import type { HitTester } from "./HitTester";
+import type { HitTester, ResizeHandle } from "./HitTester";
 import { getBoardState } from "../store/boardStore";
 import { getSelectionState, useSelectionStore } from "../store/selectionStore";
 import { useViewportStore } from "../store/viewportStore";
@@ -9,8 +9,7 @@ import {
   emitCreateElement,
 } from "../socket/boardEvents";
 import { createElement } from "./ElementFactory";
-import type { CanvasElement } from "@murmur/shared";
-import type { ResizeHandle } from "./HitTester";
+import type { CanvasElement, ArrowElement } from "@murmur/shared";
 
 type Tool = "select" | "sticky_note" | "text_box" | "shape" | "arrow" | "image";
 
@@ -33,6 +32,21 @@ interface ResizeState {
   startY: number;
   startWidth: number;
   startHeight: number;
+}
+
+interface RotateState {
+  isRotating: boolean;
+  elementId: string | null;
+  cx: number;
+  cy: number;
+  startAngle: number;
+  startRotation: number;
+}
+
+interface ArrowDragState {
+  isDragging: boolean;
+  elementId: string | null;
+  pointIndex: number;
 }
 
 export class InputHandler {
@@ -64,6 +78,21 @@ export class InputHandler {
     startHeight: 0,
   };
 
+  private rotate: RotateState = {
+    isRotating: false,
+    elementId: null,
+    cx: 0,
+    cy: 0,
+    startAngle: 0,
+    startRotation: 0,
+  };
+
+  private arrowDrag: ArrowDragState = {
+    isDragging: false,
+    elementId: null,
+    pointIndex: -1,
+  };
+
   private isPanning = false;
   private lastPanX = 0;
   private lastPanY = 0;
@@ -77,6 +106,7 @@ export class InputHandler {
     boardId: string,
     userId: string,
     private onDblClickElement?: (element: CanvasElement) => void,
+    private onElementCreated?: (id: string) => void,
   ) {
     this.canvas = canvas;
     this.viewport = viewport;
@@ -111,7 +141,6 @@ export class InputHandler {
     const screenPos = this.viewport.eventToScreen(e);
     const { elements, zOrder } = getBoardState();
 
-    // middle mouse = pan
     if (e.button === 1) {
       this.isPanning = true;
       this.lastPanX = e.clientX;
@@ -120,7 +149,6 @@ export class InputHandler {
       return;
     }
 
-    // space + drag = pan
     if (e.button === 0 && tool === "select" && e.altKey) {
       this.isPanning = true;
       this.lastPanX = e.clientX;
@@ -129,7 +157,6 @@ export class InputHandler {
       return;
     }
 
-    // tool-based element creation
     if (tool !== "select" && tool !== "image") {
       const element = createElement(
         tool,
@@ -140,6 +167,7 @@ export class InputHandler {
       );
       getBoardState().addElement(element);
       emitCreateElement(element);
+      this.onElementCreated?.(element.id);
       useSelectionStore.getState().select(element.id);
       useSelectionStore.getState().setActiveTool("select");
       this.onDirty();
@@ -148,9 +176,37 @@ export class InputHandler {
 
     if (tool === "select") {
       const elementsArray = Object.values(elements);
+      const { selectedIds } = getSelectionState();
+
+      // check rotation handle
+      if (selectedIds.size === 1) {
+        const selectedId = Array.from(selectedIds)[0]!;
+        const el = elements[selectedId];
+        if (el) {
+          const isRotateHandle = this.hitTester.hitTestRotateHandle(
+            worldPos.x,
+            worldPos.y,
+            el,
+            this.viewport.state.scale,
+          );
+          if (isRotateHandle) {
+            this.rotate = {
+              isRotating: true,
+              elementId: el.id,
+              cx: el.x + el.width / 2,
+              cy: el.y + el.height / 2,
+              startAngle: Math.atan2(
+                worldPos.y - (el.y + el.height / 2),
+                worldPos.x - (el.x + el.width / 2),
+              ),
+              startRotation: el.rotation,
+            };
+            return;
+          }
+        }
+      }
 
       // check resize handles
-      const { selectedIds } = getSelectionState();
       if (selectedIds.size === 1) {
         const selectedId = Array.from(selectedIds)[0]!;
         const el = elements[selectedId];
@@ -178,6 +234,30 @@ export class InputHandler {
         }
       }
 
+      // check arrow endpoint dragging
+      const hitArrow = this.hitTester.hitTest(
+        worldPos.x,
+        worldPos.y,
+        elementsArray,
+        zOrder,
+      );
+      if (hitArrow && hitArrow.element.type === "arrow") {
+        const arrow = hitArrow.element as ArrowElement;
+        const tolerance = 10 / this.viewport.state.scale;
+        for (let i = 0; i < arrow.points.length; i++) {
+          const pt = arrow.points[i]!;
+          if (Math.hypot(worldPos.x - pt.x, worldPos.y - pt.y) < tolerance) {
+            this.arrowDrag = {
+              isDragging: true,
+              elementId: arrow.id,
+              pointIndex: i,
+            };
+            useSelectionStore.getState().select(arrow.id);
+            return;
+          }
+        }
+      }
+
       const hit = this.hitTester.hitTest(
         worldPos.x,
         worldPos.y,
@@ -192,7 +272,6 @@ export class InputHandler {
           useSelectionStore.getState().select(hit.element.id);
         }
 
-        // start drag
         this.drag.isDragging = true;
         this.drag.startWorldX = worldPos.x;
         this.drag.startWorldY = worldPos.y;
@@ -222,6 +301,18 @@ export class InputHandler {
       useViewportStore.getState().pan(dx, dy);
       this.lastPanX = e.clientX;
       this.lastPanY = e.clientY;
+      this.onDirty();
+      return;
+    }
+
+    if (this.rotate.isRotating && this.rotate.elementId) {
+      const angle = Math.atan2(
+        worldPos.y - this.rotate.cy,
+        worldPos.x - this.rotate.cx,
+      );
+      const rotation =
+        this.rotate.startRotation + (angle - this.rotate.startAngle);
+      getBoardState().updateElement({ id: this.rotate.elementId, rotation });
       this.onDirty();
       return;
     }
@@ -280,8 +371,19 @@ export class InputHandler {
         width: newW,
         height: newH,
       });
-
       this.onDirty();
+      return;
+    }
+
+    if (this.arrowDrag.isDragging && this.arrowDrag.elementId) {
+      const { elements } = getBoardState();
+      const el = elements[this.arrowDrag.elementId];
+      if (el && el.type === "arrow") {
+        const newPoints = [...el.points];
+        newPoints[this.arrowDrag.pointIndex] = { x: worldPos.x, y: worldPos.y };
+        getBoardState().updateElement({ id: el.id, points: newPoints } as any);
+        this.onDirty();
+      }
       return;
     }
 
@@ -335,8 +437,12 @@ export class InputHandler {
       });
     }
 
-    // update cursor based on what's under the mouse
-    if (!this.drag.isDragging && !this.resize.isResizing && !this.isPanning) {
+    if (
+      !this.drag.isDragging &&
+      !this.resize.isResizing &&
+      !this.rotate.isRotating &&
+      !this.isPanning
+    ) {
       const { elements } = getBoardState();
       const { selectedIds } = getSelectionState();
       const scale = this.viewport.state.scale;
@@ -345,6 +451,17 @@ export class InputHandler {
         const id = Array.from(selectedIds)[0]!;
         const el = elements[id];
         if (el) {
+          const isRotate = this.hitTester.hitTestRotateHandle(
+            worldPos.x,
+            worldPos.y,
+            el,
+            scale,
+          );
+          if (isRotate) {
+            this.canvas.style.cursor = "crosshair";
+            return;
+          }
+
           const handle = this.hitTester.hitTestHandle(
             worldPos.x,
             worldPos.y,
@@ -400,7 +517,7 @@ export class InputHandler {
     if (this.resize.isResizing && this.resize.elementId) {
       const { elements } = getBoardState();
       const el = elements[this.resize.elementId];
-      if (el) {
+      if (el)
         emitUpdateElement({
           id: el.id,
           x: el.x,
@@ -408,7 +525,6 @@ export class InputHandler {
           width: el.width,
           height: el.height,
         });
-      }
       this.resize = {
         isResizing: false,
         handle: null,
@@ -422,10 +538,30 @@ export class InputHandler {
       };
     }
 
-    const { isMarqueeSelecting } = getSelectionState();
-    if (isMarqueeSelecting) {
-      useSelectionStore.getState().endMarquee();
+    if (this.rotate.isRotating && this.rotate.elementId) {
+      const { elements } = getBoardState();
+      const el = elements[this.rotate.elementId];
+      if (el) emitUpdateElement({ id: el.id, rotation: el.rotation });
+      this.rotate = {
+        isRotating: false,
+        elementId: null,
+        cx: 0,
+        cy: 0,
+        startAngle: 0,
+        startRotation: 0,
+      };
     }
+
+    if (this.arrowDrag.isDragging && this.arrowDrag.elementId) {
+      const { elements } = getBoardState();
+      const el = elements[this.arrowDrag.elementId];
+      if (el && el.type === "arrow")
+        emitUpdateElement({ id: el.id, points: el.points } as any);
+      this.arrowDrag = { isDragging: false, elementId: null, pointIndex: -1 };
+    }
+
+    const { isMarqueeSelecting } = getSelectionState();
+    if (isMarqueeSelecting) useSelectionStore.getState().endMarquee();
 
     this.onDirty();
   };

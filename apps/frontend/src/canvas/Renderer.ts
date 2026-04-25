@@ -306,6 +306,17 @@ export class Renderer {
       const el = elements.find((e) => e.id === id);
       if (!el) continue;
 
+      ctx.save();
+
+      // rotate selection around element center
+      if (el.rotation !== 0) {
+        const cx = el.x + el.width / 2;
+        const cy = el.y + el.height / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(el.rotation);
+        ctx.translate(-cx, -cy);
+      }
+
       // selection border
       ctx.strokeStyle = SELECTION_COLOR;
       ctx.lineWidth = 2 / scale;
@@ -323,6 +334,8 @@ export class Renderer {
       if (el.type !== "arrow") {
         this.drawHandles(el, scale);
       }
+
+      ctx.restore();
     }
   }
 
@@ -349,8 +362,28 @@ export class Renderer {
       ctx.fill();
       ctx.stroke();
     }
-  }
 
+    // rotation handle — circle above top center
+    const rotateY = el.y - 24 / scale;
+    const rotateX = el.x + el.width / 2;
+
+    // line from top center to rotation handle
+    ctx.strokeStyle = SELECTION_COLOR;
+    ctx.lineWidth = 1 / scale;
+    ctx.beginPath();
+    ctx.moveTo(el.x + el.width / 2, el.y);
+    ctx.lineTo(rotateX, rotateY);
+    ctx.stroke();
+
+    // circle handle
+    ctx.fillStyle = "white";
+    ctx.strokeStyle = SELECTION_COLOR;
+    ctx.lineWidth = 1.5 / scale;
+    ctx.beginPath();
+    ctx.arc(rotateX, rotateY, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
   private drawMarquee() {
     const { isMarqueeSelecting, marqueeStart, marqueeEnd } =
       getSelectionState();

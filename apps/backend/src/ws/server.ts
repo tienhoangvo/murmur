@@ -5,6 +5,8 @@ import type {
 } from "@murmur/shared";
 import type { Server as HttpServer } from "http";
 import { wsAuthMiddleware } from "../middleware/wsAuth.js";
+import { registerBoardHandlers } from "./boardHandlers.js";
+import { registerPresenceHandlers } from "./presenceHandlers.js";
 
 export function initSocketServer(httpServer: HttpServer) {
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(
@@ -23,6 +25,9 @@ export function initSocketServer(httpServer: HttpServer) {
     console.log(
       `socket connected: ${socket.id} user: ${socket.data["userId"]}`,
     );
+
+    registerBoardHandlers(io, socket);
+    registerPresenceHandlers(io, socket);
 
     socket.on("disconnect", () => {
       console.log(`socket disconnected: ${socket.id}`);

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CanvasEngine } from "../canvas/CanvasEngine";
+import { getCurrentUser } from "../api/me";
 import styles from "./BoardCanvas.module.css";
 
 interface Props {
@@ -7,7 +8,7 @@ interface Props {
   role: string;
 }
 
-export function BoardCanvas({ role }: Props) {
+export function BoardCanvas({ boardId, role }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
@@ -17,12 +18,12 @@ export function BoardCanvas({ role }: Props) {
     const overlay = overlayRef.current;
     if (!canvas || !overlay) return;
 
-    engineRef.current = new CanvasEngine(canvas, overlay);
+    const user = getCurrentUser();
+    const userId = user?.userId ?? "anonymous";
 
-    const handleResize = () => {
-      engineRef.current?.resize();
-    };
+    engineRef.current = new CanvasEngine(canvas, overlay, boardId, userId);
 
+    const handleResize = () => engineRef.current?.resize();
     window.addEventListener("resize", handleResize);
 
     return () => {
@@ -30,7 +31,12 @@ export function BoardCanvas({ role }: Props) {
       engineRef.current = null;
       window.removeEventListener("resize", handleResize);
     };
-  }, []);
+  }, [boardId]);
+
+  // mark dirty when board state changes
+  useEffect(() => {
+    engineRef.current?.markDirty();
+  });
 
   const isReadOnly = role === "viewer";
 

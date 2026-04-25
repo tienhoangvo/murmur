@@ -18,6 +18,8 @@ export class CanvasEngine {
   constructor(
     private canvas: HTMLCanvasElement,
     private overlayCanvas: HTMLCanvasElement,
+    private boardId: string,
+    private userId: string,
   ) {
     const ctx = canvas.getContext("2d")!;
     this.setupDpr(canvas);
@@ -31,12 +33,12 @@ export class CanvasEngine {
       this.viewport,
       this.hitTester,
       () => this.markDirty(),
+      boardId,
+      userId,
     );
     this.selectionManager = new SelectionManager();
 
-    // keyboard shortcuts
     window.addEventListener("keydown", this.onKeyDown);
-
     this.startLoop();
   }
 
@@ -89,9 +91,7 @@ export class CanvasEngine {
   };
 
   destroy() {
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-    }
+    if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.inputHandler.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
   }

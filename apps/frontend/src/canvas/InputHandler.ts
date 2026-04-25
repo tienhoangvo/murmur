@@ -1,10 +1,15 @@
 import type { Viewport } from "./Viewport";
 import type { HitTester } from "./HitTester";
 import { getBoardState } from "../store/boardStore";
-import { getSelectionState } from "../store/selectionStore";
-import { useSelectionStore } from "../store/selectionStore";
+import { getSelectionState, useSelectionStore } from "../store/selectionStore";
 import { useViewportStore } from "../store/viewportStore";
-import { emitUpdateElement, emitPresenceUpdate } from "../socket/boardEvents";
+import {
+  emitUpdateElement,
+  emitPresenceUpdate,
+  emitCreateElement,
+} from "../socket/boardEvents";
+import { createElement } from "./ElementFactory";
+import type { CanvasElement } from "@murmur/shared";
 
 type Tool = "select" | "sticky_note" | "text_box" | "shape" | "arrow" | "image";
 
@@ -22,6 +27,8 @@ export class InputHandler {
   private viewport: Viewport;
   private hitTester: HitTester;
   private onDirty: () => void;
+  private boardId: string;
+  private userId: string;
 
   private drag: DragState = {
     isDragging: false,
@@ -42,11 +49,15 @@ export class InputHandler {
     viewport: Viewport,
     hitTester: HitTester,
     onDirty: () => void,
+    boardId: string,
+    userId: string,
   ) {
     this.canvas = canvas;
     this.viewport = viewport;
     this.hitTester = hitTester;
     this.onDirty = onDirty;
+    this.boardId = boardId;
+    this.userId = userId;
     this.attach();
   }
 
@@ -73,10 +84,9 @@ export class InputHandler {
     const worldPos = this.viewport.eventToWorld(e);
     const screenPos = this.viewport.eventToScreen(e);
     const { elements, zOrder } = getBoardState();
-    const elementsArray = Object.values(elements);
 
-    // middle mouse or space+drag = pan
-    if (e.button === 1 || (e.button === 0 && tool === "select" && e.altKey)) {
+    // middle mouse = pan
+    if (e.button === 1) {
       this.isPanning = true;
       this.lastPanX = e.clientX;
       this.lastPanY = e.clientY;
@@ -84,8 +94,36 @@ export class InputHandler {
       return;
     }
 
+    // space + drag = pan
+    if (e.button === 0 && tool === "select" && e.altKey) {
+      this.isPanning = true;
+      this.lastPanX = e.clientX;
+      this.lastPanY = e.clientY;
+      this.canvas.style.cursor = "grabbing";
+      return;
+    }
+
+    // tool-based element creation
+    if (tool !== "select" && tool !== "image") {
+      const element = createElement(
+        tool,
+        worldPos.x,
+        worldPos.y,
+        this.boardId,
+        this.userId,
+      );
+      getBoardState().addElement(element);
+      emitCreateElement(element);
+      useSelectionStore.getState().select(element.id);
+      useSelectionStore.getState().setActiveTool("select");
+      this.onDirty();
+      return;
+    }
+
     if (tool === "select") {
-      // check resize handles first
+      const elementsArray = Object.values(elements);
+
+      // check resize handles
       const { selectedIds } = getSelectionState();
       if (selectedIds.size === 1) {
         const selectedId = Array.from(selectedIds)[0]!;
@@ -97,10 +135,7 @@ export class InputHandler {
             el,
             this.viewport.state.scale,
           );
-          if (handle) {
-            // TODO: resize logic
-            return;
-          }
+          if (handle) return;
         }
       }
 
@@ -131,7 +166,6 @@ export class InputHandler {
           }),
         );
       } else {
-        // start marquee
         if (!e.shiftKey) useSelectionStore.getState().deselectAll();
         useSelectionStore.getState().startMarquee(worldPos);
       }
@@ -143,7 +177,6 @@ export class InputHandler {
   private onMouseMove = (e: MouseEvent) => {
     const worldPos = this.viewport.eventToWorld(e);
 
-    // pan
     if (this.isPanning) {
       const dx = e.clientX - this.lastPanX;
       const dy = e.clientY - this.lastPanY;
@@ -154,30 +187,28 @@ export class InputHandler {
       return;
     }
 
-    // drag elements
     if (this.drag.isDragging) {
       const dx = worldPos.x - this.drag.startWorldX;
       const dy = worldPos.y - this.drag.startWorldY;
-
       const { elements } = getBoardState();
 
       for (const [id, startPos] of this.drag.elementStartPositions) {
         const el = elements[id];
         if (!el) continue;
-        const newX = startPos.x + dx;
-        const newY = startPos.y + dy;
-        getBoardState().updateElement({ id, x: newX, y: newY });
+        getBoardState().updateElement({
+          id,
+          x: startPos.x + dx,
+          y: startPos.y + dy,
+        });
       }
 
       this.onDirty();
       return;
     }
 
-    // marquee
     const { isMarqueeSelecting } = getSelectionState();
     if (isMarqueeSelecting) {
       useSelectionStore.getState().updateMarquee(worldPos);
-
       const { marqueeStart, marqueeEnd } = getSelectionState();
       if (marqueeStart && marqueeEnd) {
         const { elements } = getBoardState();
@@ -194,11 +225,9 @@ export class InputHandler {
         );
         useSelectionStore.getState().selectMany(ids);
       }
-
       this.onDirty();
     }
 
-    // throttled presence update
     const now = Date.now();
     if (now - this.presenceThrottle > 16) {
       this.presenceThrottle = now;
@@ -216,7 +245,6 @@ export class InputHandler {
       return;
     }
 
-    // emit final positions on mouseup
     if (this.drag.isDragging) {
       const { elements } = getBoardState();
       for (const id of this.drag.elementStartPositions.keys()) {
@@ -248,19 +276,17 @@ export class InputHandler {
 
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
-
     if (e.ctrlKey || e.metaKey) {
       const screenPos = this.viewport.eventToScreen(e);
       this.viewport.zoom(e.deltaY, screenPos.x, screenPos.y);
     } else {
       useViewportStore.getState().pan(-e.deltaX, -e.deltaY);
     }
-
     this.onDirty();
   };
 
   private onDblClick = () => {
-    // TODO: open text editor for sticky notes / text boxes
+    // TODO: open text editor
   };
 
   updateCursor() {

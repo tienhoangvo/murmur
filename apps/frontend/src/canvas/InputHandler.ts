@@ -179,6 +179,10 @@ export class InputHandler {
       this.onElementCreated?.(element.id);
       useSelectionStore.getState().select(element.id);
       useSelectionStore.getState().setActiveTool("select");
+      // auto-open editor for text elements
+      if (tool === "text" && this.onDblClickElement) {
+        this.onDblClickElement(element);
+      }
       this.onDirty();
       return;
     }

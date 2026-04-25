@@ -171,25 +171,63 @@ export class Renderer {
     const arcSize = el.cloudArcSize ?? 0.5;
     const { x, y, width, height } = el;
 
-    const cx = x + width / 2;
-    const cy = y + height / 2;
-    const rx = width / 2;
-    const ry = height / 2;
+    // divide perimeter into arc segments
+    const perimeterPoints: { x: number; y: number; angle: number }[] = [];
 
-    ctx.beginPath();
-
+    // top edge
     for (let i = 0; i < arcs; i++) {
-      const startAngle = (i / arcs) * Math.PI * 2;
-      const endAngle = ((i + 1) / arcs) * Math.PI * 2;
-      const midAngle = (startAngle + endAngle) / 2;
-
-      const bumpX = cx + Math.cos(midAngle) * rx * (1 + arcSize * 0.3);
-      const bumpY = cy + Math.sin(midAngle) * ry * (1 + arcSize * 0.3);
-      const bumpR = Math.min(rx, ry) * arcSize * 0.6;
-
-      ctx.arc(bumpX, bumpY, bumpR, midAngle + Math.PI, midAngle, false);
+      const t = (i + 0.5) / arcs;
+      perimeterPoints.push({
+        x: x + t * width,
+        y: y,
+        angle: -Math.PI / 2,
+      });
+    }
+    // right edge
+    for (let i = 0; i < Math.max(1, Math.floor((arcs * height) / width)); i++) {
+      const t = (i + 0.5) / Math.max(1, Math.floor((arcs * height) / width));
+      perimeterPoints.push({
+        x: x + width,
+        y: y + t * height,
+        angle: 0,
+      });
+    }
+    // bottom edge
+    for (let i = arcs - 1; i >= 0; i--) {
+      const t = (i + 0.5) / arcs;
+      perimeterPoints.push({
+        x: x + t * width,
+        y: y + height,
+        angle: Math.PI / 2,
+      });
+    }
+    // left edge
+    for (
+      let i = Math.max(1, Math.floor((arcs * height) / width)) - 1;
+      i >= 0;
+      i--
+    ) {
+      const t = (i + 0.5) / Math.max(1, Math.floor((arcs * height) / width));
+      perimeterPoints.push({
+        x: x,
+        y: y + t * height,
+        angle: Math.PI,
+      });
     }
 
+    const bumpR = (Math.min(width, height) / arcs) * arcSize * 1.2;
+
+    ctx.beginPath();
+    for (const pt of perimeterPoints) {
+      ctx.arc(
+        pt.x,
+        pt.y,
+        bumpR,
+        pt.angle + Math.PI / 2,
+        pt.angle - Math.PI / 2,
+        false,
+      );
+    }
     ctx.closePath();
     ctx.fill();
     if (el.strokeWidth > 0) ctx.stroke();

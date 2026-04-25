@@ -1,7 +1,16 @@
 import { create } from "zustand";
 import type { Point } from "@murmur/shared";
 
-type Tool = "select" | "sticky_note" | "text_box" | "shape" | "arrow" | "image";
+type Tool =
+  | "select"
+  | "rect"
+  | "square"
+  | "ellipse"
+  | "circle"
+  | "cloud"
+  | "arrow"
+  | "text"
+  | "freehand";
 
 interface SelectionState {
   selectedIds: Set<string>;

@@ -9,15 +9,6 @@ import type {
 import type { Viewport } from "./Viewport";
 import { getSelectionState, getMarqueeBounds } from "../store/selectionStore";
 
-const STICKY_COLORS: Record<string, string> = {
-  yellow: "hsl(48 95% 76%)",
-  pink: "hsl(340 85% 82%)",
-  blue: "hsl(210 85% 78%)",
-  green: "hsl(152 60% 74%)",
-  purple: "hsl(270 70% 80%)",
-  orange: "hsl(28 90% 74%)",
-};
-
 const HANDLE_SIZE = 8;
 const SELECTION_COLOR = "hsl(248 65% 65%)";
 const SELECTION_FILL = "hsl(248 65% 65% / 0.1)";
@@ -26,38 +17,32 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private viewport: Viewport;
   editingId: string | null = null;
+  elementBirthTimes = new Map<string, number>();
 
   constructor(ctx: CanvasRenderingContext2D, viewport: Viewport) {
     this.ctx = ctx;
     this.viewport = viewport;
   }
 
+  trackNewElement(id: string) {
+    this.elementBirthTimes.set(id, Date.now());
+  }
+
   render(elements: CanvasElement[], zOrder: string[]) {
     const ctx = this.ctx;
     const canvas = ctx.canvas;
 
-    // clear
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // draw grid
     this.drawGrid();
-
-    // apply viewport transform
     this.viewport.applyTransform(ctx);
 
-    // draw elements in z-order
     for (const id of zOrder) {
       const el = elements.find((e) => e.id === id);
       if (el) this.drawElement(el);
     }
 
-    // draw selection overlays
     this.drawSelections(elements);
-
-    // draw marquee
     this.drawMarquee();
-
-    // reset transform
     this.viewport.resetTransform(ctx);
   }
 
@@ -98,8 +83,7 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.save();
 
-    // apply rotation around element center
-    if (el.rotation !== 0) {
+    if (el.rotation !== 0 && el.type !== "arrow" && el.type !== "freehand") {
       const cx = el.x + el.width / 2;
       const cy = el.y + el.height / 2;
       ctx.translate(cx, cy);
@@ -127,7 +111,6 @@ export class Renderer {
 
   private drawShape(el: ShapeElement) {
     const ctx = this.ctx;
-
     ctx.fillStyle = el.fillColor;
     ctx.strokeStyle = el.strokeColor;
     ctx.lineWidth = el.strokeWidth;
@@ -164,142 +147,54 @@ export class Renderer {
 
     this.resetStrokeStyle();
   }
-
   private drawCloud(el: ShapeElement) {
     const ctx = this.ctx;
     const arcs = el.cloudArcs ?? 6;
     const arcSize = el.cloudArcSize ?? 0.5;
     const { x, y, width, height } = el;
 
-    // divide perimeter into arc segments
-    const perimeterPoints: { x: number; y: number; angle: number }[] = [];
-
-    // top edge
-    for (let i = 0; i < arcs; i++) {
-      const t = (i + 0.5) / arcs;
-      perimeterPoints.push({
-        x: x + t * width,
-        y: y,
-        angle: -Math.PI / 2,
-      });
-    }
-    // right edge
-    for (let i = 0; i < Math.max(1, Math.floor((arcs * height) / width)); i++) {
-      const t = (i + 0.5) / Math.max(1, Math.floor((arcs * height) / width));
-      perimeterPoints.push({
-        x: x + width,
-        y: y + t * height,
-        angle: 0,
-      });
-    }
-    // bottom edge
-    for (let i = arcs - 1; i >= 0; i--) {
-      const t = (i + 0.5) / arcs;
-      perimeterPoints.push({
-        x: x + t * width,
-        y: y + height,
-        angle: Math.PI / 2,
-      });
-    }
-    // left edge
-    for (
-      let i = Math.max(1, Math.floor((arcs * height) / width)) - 1;
-      i >= 0;
-      i--
-    ) {
-      const t = (i + 0.5) / Math.max(1, Math.floor((arcs * height) / width));
-      perimeterPoints.push({
-        x: x,
-        y: y + t * height,
-        angle: Math.PI,
-      });
-    }
-
-    const bumpR = (Math.min(width, height) / arcs) * arcSize * 1.2;
+    const bumpH = Math.min(width, height) * 0.12 * (arcSize + 0.3);
+    const hArcs = arcs;
+    const vArcs = Math.max(1, Math.round(arcs * (height / width)));
 
     ctx.beginPath();
-    for (const pt of perimeterPoints) {
-      ctx.arc(
-        pt.x,
-        pt.y,
-        bumpR,
-        pt.angle + Math.PI / 2,
-        pt.angle - Math.PI / 2,
-        false,
-      );
+    ctx.moveTo(x, y);
+
+    // top edge left to right
+    for (let i = 0; i < hArcs; i++) {
+      const x0 = x + (i / hArcs) * width;
+      const x1 = x + ((i + 1) / hArcs) * width;
+      const mx = (x0 + x1) / 2;
+      ctx.quadraticCurveTo(mx, y - bumpH, x1, y);
     }
+
+    // right edge top to bottom
+    for (let i = 0; i < vArcs; i++) {
+      const y0 = y + (i / vArcs) * height;
+      const y1 = y + ((i + 1) / vArcs) * height;
+      const my = (y0 + y1) / 2;
+      ctx.quadraticCurveTo(x + width + bumpH, my, x + width, y1);
+    }
+
+    // bottom edge right to left
+    for (let i = hArcs - 1; i >= 0; i--) {
+      const x0 = x + ((i + 1) / hArcs) * width;
+      const x1 = x + (i / hArcs) * width;
+      const mx = (x0 + x1) / 2;
+      ctx.quadraticCurveTo(mx, y + height + bumpH, x1, y + height);
+    }
+
+    // left edge bottom to top
+    for (let i = vArcs - 1; i >= 0; i--) {
+      const y0 = y + ((i + 1) / vArcs) * height;
+      const y1 = y + (i / vArcs) * height;
+      const my = (y0 + y1) / 2;
+      ctx.quadraticCurveTo(x - bumpH, my, x, y1);
+    }
+
     ctx.closePath();
     ctx.fill();
     if (el.strokeWidth > 0) ctx.stroke();
-  }
-
-  private applyStrokeStyle(style: "solid" | "dashed" | "dotted") {
-    const ctx = this.ctx;
-    switch (style) {
-      case "dashed":
-        ctx.setLineDash([8, 4]);
-        break;
-      case "dotted":
-        ctx.setLineDash([2, 4]);
-        break;
-      default:
-        ctx.setLineDash([]);
-        break;
-    }
-  }
-
-  private resetStrokeStyle() {
-    this.ctx.setLineDash([]);
-  }
-
-  private drawText(el: TextElement) {
-    const ctx = this.ctx;
-
-    // background
-    if (el.fillColor !== "transparent") {
-      ctx.fillStyle = el.fillColor;
-      this.roundRect(el.x, el.y, el.width, el.height, 4);
-      ctx.fill();
-    }
-
-    // border
-    if (el.strokeWidth > 0 && el.strokeColor !== "transparent") {
-      ctx.strokeStyle = el.strokeColor;
-      ctx.lineWidth = el.strokeWidth;
-      this.applyStrokeStyle(el.strokeStyle);
-      this.roundRect(el.x, el.y, el.width, el.height, 4);
-      ctx.stroke();
-      this.resetStrokeStyle();
-    }
-
-    // text
-    if (this.editingId !== el.id && el.content) {
-      ctx.fillStyle = el.color;
-      ctx.font = `${el.fontWeight} ${el.fontSize}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = el.align as CanvasTextAlign;
-      ctx.textBaseline = "top";
-
-      const textX =
-        el.align === "center"
-          ? el.x + el.width / 2
-          : el.align === "right"
-            ? el.x + el.width - 8
-            : el.x + 8;
-
-      // clip text vertically
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(el.x, el.y, el.width, el.height);
-      ctx.clip();
-      this.drawWrappedText(
-        el.content,
-        textX,
-        el.y + 8,
-        el.width - 16,
-        el.fontSize * 1.4,
-      );
-      ctx.restore();
-    }
   }
 
   private drawFreehand(el: FreehandElement) {
@@ -318,8 +213,7 @@ export class Renderer {
     ctx.beginPath();
     ctx.moveTo(points[0]!.x, points[0]!.y);
     for (let i = 1; i < points.length; i++) {
-      const p = points[i]!;
-      ctx.lineTo(p.x, p.y);
+      ctx.lineTo(points[i]!.x, points[i]!.y);
     }
     ctx.stroke();
     this.resetStrokeStyle();
@@ -338,16 +232,13 @@ export class Renderer {
     this.applyStrokeStyle(el.strokeStyle);
 
     ctx.beginPath();
-    const first = points[0]!;
-    ctx.moveTo(first.x, first.y);
+    ctx.moveTo(points[0]!.x, points[0]!.y);
     for (let i = 1; i < points.length; i++) {
       ctx.lineTo(points[i]!.x, points[i]!.y);
     }
     ctx.stroke();
-
     this.resetStrokeStyle();
 
-    // draw arrowhead at end
     if (el.endCap === "arrow") {
       const last = points[points.length - 1]!;
       const prev = points[points.length - 2]!;
@@ -389,6 +280,33 @@ export class Renderer {
     ctx.fill();
   }
 
+  // ─── Element bounds ──────────────────────────────────────────────────────────
+
+  getElementBounds(el: CanvasElement): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } {
+    if (el.type === "arrow" || el.type === "freehand") {
+      const xs = el.points.map((p) => p.x);
+      const ys = el.points.map((p) => p.y);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const maxX = Math.max(...xs);
+      const maxY = Math.max(...ys);
+      return {
+        x: minX,
+        y: minY,
+        width: Math.max(maxX - minX, 20),
+        height: Math.max(maxY - minY, 20),
+      };
+    }
+    return { x: el.x, y: el.y, width: el.width, height: el.height };
+  }
+
+  // ─── Selection ───────────────────────────────────────────────────────────────
+
   private drawSelections(elements: CanvasElement[]) {
     const { selectedIds } = getSelectionState();
     if (selectedIds.size === 0) return;
@@ -402,8 +320,7 @@ export class Renderer {
 
       ctx.save();
 
-      // rotate selection around element center
-      if (el.rotation !== 0) {
+      if (el.rotation !== 0 && el.type !== "arrow" && el.type !== "freehand") {
         const cx = el.x + el.width / 2;
         const cy = el.y + el.height / 2;
         ctx.translate(cx, cy);
@@ -411,23 +328,22 @@ export class Renderer {
         ctx.translate(-cx, -cy);
       }
 
-      // selection border
+      const bounds = this.getElementBounds(el);
+      const pad = (el.type === "text" ? 4 : 8) / scale;
+
       ctx.strokeStyle = SELECTION_COLOR;
-      ctx.lineWidth = 2 / scale;
+      ctx.lineWidth = 1.5 / scale;
       ctx.setLineDash([]);
       this.roundRect(
-        el.x - 2 / scale,
-        el.y - 2 / scale,
-        el.width + 4 / scale,
-        el.height + 4 / scale,
+        bounds.x - pad,
+        bounds.y - pad,
+        bounds.width + pad * 2,
+        bounds.height + pad * 2,
         4,
       );
       ctx.stroke();
 
-      // resize handles
-      if (el.type !== "arrow") {
-        this.drawHandles(el, scale);
-      }
+      this.drawHandles(el, scale);
 
       ctx.restore();
     }
@@ -436,15 +352,23 @@ export class Renderer {
   private drawHandles(el: CanvasElement, scale: number) {
     const ctx = this.ctx;
     const size = HANDLE_SIZE / scale;
+
+    const rawBounds = this.getElementBounds(el);
+    const pad = (el.type === "text" ? 4 : 8) / scale;
+    const x = rawBounds.x - pad;
+    const y = rawBounds.y - pad;
+    const width = rawBounds.width + pad * 2;
+    const height = rawBounds.height + pad * 2;
+
     const positions = [
-      { x: el.x, y: el.y },
-      { x: el.x + el.width / 2, y: el.y },
-      { x: el.x + el.width, y: el.y },
-      { x: el.x + el.width, y: el.y + el.height / 2 },
-      { x: el.x + el.width, y: el.y + el.height },
-      { x: el.x + el.width / 2, y: el.y + el.height },
-      { x: el.x, y: el.y + el.height },
-      { x: el.x, y: el.y + el.height / 2 },
+      { x, y },
+      { x: x + width / 2, y },
+      { x: x + width, y },
+      { x: x + width, y: y + height / 2 },
+      { x: x + width, y: y + height },
+      { x: x + width / 2, y: y + height },
+      { x, y: y + height },
+      { x, y: y + height / 2 },
     ];
 
     for (const pos of positions) {
@@ -457,19 +381,19 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // rotation handle — circle above top center
-    const rotateY = el.y - 24 / scale;
-    const rotateX = el.x + el.width / 2;
+    // rotation handle — skip for arrows and freehand
+    if (el.type === "arrow" || el.type === "freehand") return;
 
-    // line from top center to rotation handle
+    const rotateX = x + width / 2;
+    const rotateY = y - 24 / scale;
+
     ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1 / scale;
     ctx.beginPath();
-    ctx.moveTo(el.x + el.width / 2, el.y);
+    ctx.moveTo(x + width / 2, y);
     ctx.lineTo(rotateX, rotateY);
     ctx.stroke();
 
-    // circle handle
     ctx.fillStyle = "white";
     ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1.5 / scale;
@@ -478,6 +402,7 @@ export class Renderer {
     ctx.fill();
     ctx.stroke();
   }
+
   private drawMarquee() {
     const { isMarqueeSelecting, marqueeStart, marqueeEnd } =
       getSelectionState();
@@ -493,6 +418,25 @@ export class Renderer {
     ctx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
     ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
     ctx.setLineDash([]);
+  }
+
+  private applyStrokeStyle(style: "solid" | "dashed" | "dotted") {
+    const ctx = this.ctx;
+    switch (style) {
+      case "dashed":
+        ctx.setLineDash([8, 4]);
+        break;
+      case "dotted":
+        ctx.setLineDash([2, 4]);
+        break;
+      default:
+        ctx.setLineDash([]);
+        break;
+    }
+  }
+
+  private resetStrokeStyle() {
+    this.ctx.setLineDash([]);
   }
 
   private drawWrappedText(
@@ -524,7 +468,6 @@ export class Renderer {
           line = word;
           currentY += lineHeight;
         } else if (ctx.measureText(word).width > maxWidth) {
-          // word itself is too long — break at character level
           if (line) {
             ctx.fillText(line, x, currentY);
             line = "";

@@ -23,12 +23,12 @@
   border: none;
   outline: none;
   resize: none;
-  font-family: Inter, system-ui, sans-serif;
-  font-weight: 400;
-  color: hsl(220 15% 15%);
   z-index: 30;
-  overflow: hidden;
-  padding: 0;
-  line-height: 1.4;
   cursor: text;
+  caret-color: hsl(248 65% 65%);
+}
+
+.textEditor::selection {
+  background: hsl(248 65% 65% / 0.2);
+  color: inherit;
 }

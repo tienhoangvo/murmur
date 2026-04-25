@@ -61,7 +61,7 @@ export function createElement(
         ...base,
         type: "text",
         width: 200,
-        height: 60,
+        height: 32,
         content: "Text",
         fontSize: 16,
         fontWeight: "normal",

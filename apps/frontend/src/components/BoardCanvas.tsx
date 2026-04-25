@@ -20,6 +20,11 @@ interface EditingState {
   height: number;
   content: string;
   fontSize: number;
+  fontWeight: "normal" | "bold";
+  align: "left" | "center" | "right";
+  color: string;
+  scale: number;
+  rotation: number;
 }
 
 export function BoardCanvas({ boardId, role }: Props) {
@@ -41,15 +46,10 @@ export function BoardCanvas({ boardId, role }: Props) {
       overlay,
       boardId,
       userId,
-      // callback when user double-clicks an element
       (element: CanvasElement) => {
         if (element.type !== "text") return;
-        const content = element.content;
-        const fontSize = element.fontSize;
 
-        // read viewport directly from store — not from closed-over React state
         const vp = useViewportStore.getState();
-
         const screenX = element.x * vp.scale + vp.x;
         const screenY = element.y * vp.scale + vp.y;
 
@@ -59,8 +59,13 @@ export function BoardCanvas({ boardId, role }: Props) {
           y: screenY,
           width: element.width * vp.scale,
           height: element.height * vp.scale,
-          content,
-          fontSize: fontSize * vp.scale,
+          content: element.content,
+          fontSize: element.fontSize * vp.scale,
+          fontWeight: element.fontWeight,
+          align: element.align,
+          color: element.color,
+          scale: vp.scale,
+          rotation: element.rotation,
         });
 
         engineRef.current?.setEditingId(element.id);
@@ -77,7 +82,6 @@ export function BoardCanvas({ boardId, role }: Props) {
     };
   }, [boardId]);
 
-  // mark dirty whenever elements change
   useEffect(() => {
     const unsub = useBoardStore.subscribe(() => {
       engineRef.current?.markDirty();
@@ -111,7 +115,6 @@ export function BoardCanvas({ boardId, role }: Props) {
         className={styles.overlay}
         style={{ pointerEvents: "none" }}
       />
-
       {editing && <TextEditor editing={editing} onBlur={handleEditBlur} />}
     </div>
   );
@@ -124,33 +127,73 @@ function TextEditor({
   editing: EditingState;
   onBlur: (content: string) => void;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
   }, []);
 
+  // canvas draws at y+8 with textBaseline=top
+  // contentEditable adds half-leading above first line = (lineHeight - fontSize) / 2
+  // at fontSize=16, lineHeight=16*1.4=22.4, half-leading = 3.2px
+  // so paddingTop = 8 - 3.2 = ~5px
+  const halfLeading = (editing.fontSize * 0.4) / 2;
+  const paddingTop = Math.max(0, 8 * editing.scale - halfLeading);
+
   return (
-    <textarea
+    <div
       ref={ref}
-      defaultValue={editing.content}
+      contentEditable
+      suppressContentEditableWarning
       className={styles.textEditor}
       style={{
-        left: editing.x + 12 * (editing.fontSize / 14),
-        top: editing.y + 12 * (editing.fontSize / 14),
-        width: editing.width - 24 * (editing.fontSize / 14),
-        height: editing.height - 24 * (editing.fontSize / 14),
+        left: editing.x,
+        top: editing.y,
+        width: editing.width,
+        height: editing.height,
         fontSize: editing.fontSize,
-        lineHeight: 1.4,
+        lineHeight: `${editing.fontSize * 1.4}px`,
+        fontWeight: editing.fontWeight,
+        textAlign: editing.align,
+        color: editing.color,
+        fontFamily: "Inter, system-ui, sans-serif",
+        paddingTop,
+        paddingLeft: 8 * editing.scale,
+        paddingRight: 8 * editing.scale,
+        paddingBottom: 8 * editing.scale,
+        boxSizing: "border-box",
+        overflow: "hidden",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        transform: `rotate(${editing.rotation}rad)`,
+        transformOrigin: "center center",
       }}
-      onBlur={(e) => onBlur(e.target.value)}
+      onBlur={(e) => onBlur(e.currentTarget.innerText)}
       onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          onBlur(e.currentTarget.value);
+        // prevent browser rich text shortcuts
+        if (
+          (e.metaKey || e.ctrlKey) &&
+          ["b", "i", "u"].includes(e.key.toLowerCase())
+        ) {
+          e.preventDefault();
         }
+        if (e.key === "Escape") onBlur(e.currentTarget.innerText);
         e.stopPropagation();
       }}
-    />
+      onPaste={(e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData("text/plain");
+        document.execCommand("insertText", false, text);
+      }}
+    >
+      {editing.content}
+    </div>
   );
 }

@@ -9,16 +9,38 @@ export type ResizeHandle = "nw" | "n" | "ne" | "e" | "w" | "sw" | "s" | "se";
 
 const HANDLE_SIZE = 8;
 const ARROW_HIT_TOLERANCE = 6;
+const SELECTION_PAD = 8;
 
 export class HitTester {
-  // test a point against all elements, returns topmost hit
+  private getElementBounds(el: CanvasElement): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } {
+    if (el.type === "arrow" || el.type === "freehand") {
+      const xs = el.points.map((p) => p.x);
+      const ys = el.points.map((p) => p.y);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const maxX = Math.max(...xs);
+      const maxY = Math.max(...ys);
+      return {
+        x: minX,
+        y: minY,
+        width: Math.max(maxX - minX, 20),
+        height: Math.max(maxY - minY, 20),
+      };
+    }
+    return { x: el.x, y: el.y, width: el.width, height: el.height };
+  }
+
   hitTest(
     x: number,
     y: number,
     elements: CanvasElement[],
     zOrder: string[],
   ): HitResult | null {
-    // iterate reverse z-order (topmost first)
     for (let i = zOrder.length - 1; i >= 0; i--) {
       const id = zOrder[i];
       if (!id) continue;
@@ -32,37 +54,41 @@ export class HitTester {
     return null;
   }
 
-  // test a point against resize handles of a selected element
   hitTestHandle(
     x: number,
     y: number,
     element: CanvasElement,
     scale: number,
   ): ResizeHandle | null {
-    if (element.type === "arrow") return null;
+    const cos = Math.cos(-element.rotation);
+    const sin = Math.sin(-element.rotation);
 
-    const cx = element.x + element.width / 2;
-    const cy = element.y + element.height / 2;
+    let lx = x;
+    let ly = y;
 
-    // transform mouse into element's local space
-    if (element.rotation !== 0) {
-      const cos = Math.cos(-element.rotation);
-      const sin = Math.sin(-element.rotation);
+    if (
+      element.rotation !== 0 &&
+      element.type !== "arrow" &&
+      element.type !== "freehand"
+    ) {
+      const bounds = this.getElementBounds(element);
+      const cx = bounds.x + bounds.width / 2;
+      const cy = bounds.y + bounds.height / 2;
       const dx = x - cx;
       const dy = y - cy;
-      x = cx + dx * cos - dy * sin;
-      y = cy + dx * sin + dy * cos;
+      lx = cx + dx * cos - dy * sin;
+      ly = cy + dx * sin + dy * cos;
     }
 
-    const handles = this.getHandlePositions(element);
+    const handles = this.getHandlePositions(element, scale);
     const size = HANDLE_SIZE / scale;
 
     for (const [handle, pos] of Object.entries(handles)) {
       if (
-        x >= pos.x - size / 2 &&
-        x <= pos.x + size / 2 &&
-        y >= pos.y - size / 2 &&
-        y <= pos.y + size / 2
+        lx >= pos.x - size / 2 &&
+        lx <= pos.x + size / 2 &&
+        ly >= pos.y - size / 2 &&
+        ly <= pos.y + size / 2
       ) {
         return handle as ResizeHandle;
       }
@@ -76,13 +102,17 @@ export class HitTester {
     element: CanvasElement,
     scale: number,
   ): boolean {
-    if (element.type === "arrow") return false;
+    if (element.type === "arrow" || element.type === "freehand") return false;
 
-    const cx = element.x + element.width / 2;
-    const cy = element.y + element.height / 2;
+    const bounds = this.getElementBounds(element);
+    const pad = SELECTION_PAD / scale;
+    const bx = bounds.x - pad;
+    const by = bounds.y - pad;
+    const bw = bounds.width + pad * 2;
 
-    // transform the mouse point into the element's local (unrotated) space
     if (element.rotation !== 0) {
+      const cx = bounds.x + bounds.width / 2;
+      const cy = bounds.y + bounds.height / 2;
       const cos = Math.cos(-element.rotation);
       const sin = Math.sin(-element.rotation);
       const dx = x - cx;
@@ -91,26 +121,30 @@ export class HitTester {
       y = cy + dx * sin + dy * cos;
     }
 
-    // now hit test in local space
-    const rotateX = element.x + element.width / 2;
-    const rotateY = element.y - 24 / scale;
-    const size = 8 / scale / 2 + 4 / scale;
+    const rotateX = bx + bw / 2;
+    const rotateY = by - 24 / scale;
+    const size = HANDLE_SIZE / scale / 2 + 4 / scale;
 
     return Math.hypot(x - rotateX, y - rotateY) <= size;
   }
 
-  // test all elements against a marquee rect
   hitTestMarquee(
-    marqueeX: number,
-    marqueeY: number,
-    marqueeW: number,
-    marqueeH: number,
+    mx: number,
+    my: number,
+    mw: number,
+    mh: number,
     elements: CanvasElement[],
   ): string[] {
     return elements
-      .filter((el) =>
-        this.elementInMarquee(el, marqueeX, marqueeY, marqueeW, marqueeH),
-      )
+      .filter((el) => {
+        const b = this.getElementBounds(el);
+        return (
+          b.x < mx + mw &&
+          b.x + b.width > mx &&
+          b.y < my + mh &&
+          b.y + b.height > my
+        );
+      })
       .map((el) => el.id);
   }
 
@@ -118,14 +152,47 @@ export class HitTester {
     if (el.type === "arrow") {
       return this.pointNearArrow(x, y, el as ArrowElement);
     }
+    if (el.type === "freehand") {
+      return this.pointNearFreehand(x, y, el);
+    }
 
-    // AABB test for all other element types
+    // rotate point into element local space
+    if (el.rotation !== 0) {
+      const cx = el.x + el.width / 2;
+      const cy = el.y + el.height / 2;
+      const cos = Math.cos(-el.rotation);
+      const sin = Math.sin(-el.rotation);
+      const dx = x - cx;
+      const dy = y - cy;
+      x = cx + dx * cos - dy * sin;
+      y = cy + dx * sin + dy * cos;
+    }
+
     return (
       x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height
     );
   }
 
   private pointNearArrow(x: number, y: number, el: ArrowElement): boolean {
+    const points = el.points;
+    if (points.length < 2) return false;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      if (!a || !b) continue;
+      if (this.distToSegment(x, y, a.x, a.y, b.x, b.y) < ARROW_HIT_TOLERANCE) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private pointNearFreehand(
+    x: number,
+    y: number,
+    el: CanvasElement & { points: { x: number; y: number }[] },
+  ): boolean {
     const points = el.points;
     if (points.length < 2) return false;
 
@@ -159,25 +226,16 @@ export class HitTester {
     return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
   }
 
-  private elementInMarquee(
-    el: CanvasElement,
-    mx: number,
-    my: number,
-    mw: number,
-    mh: number,
-  ): boolean {
-    return (
-      el.x < mx + mw &&
-      el.x + el.width > mx &&
-      el.y < my + mh &&
-      el.y + el.height > my
-    );
-  }
-
   getHandlePositions(
     el: CanvasElement,
+    scale: number = 1,
   ): Record<ResizeHandle, { x: number; y: number }> {
-    const { x, y, width, height } = el;
+    const bounds = this.getElementBounds(el);
+    const pad = (el.type === "text" ? 4 : SELECTION_PAD) / scale;
+    const x = bounds.x - pad;
+    const y = bounds.y - pad;
+    const width = bounds.width + pad * 2;
+    const height = bounds.height + pad * 2;
     const cx = x + width / 2;
     const cy = y + height / 2;
 

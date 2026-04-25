@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-interface ViewportState {
+export interface ViewportState {
   x: number;
   y: number;
   scale: number;

@@ -98,4 +98,9 @@ export class CanvasEngine {
     this.inputHandler.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
   }
+
+  setEditingId(id: string | null) {
+    this.renderer.editingId = id;
+    this.markDirty();
+  }
 }

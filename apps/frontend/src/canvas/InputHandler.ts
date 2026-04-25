@@ -10,6 +10,7 @@ import {
 } from "../socket/boardEvents";
 import { createElement } from "./ElementFactory";
 import type { CanvasElement } from "@murmur/shared";
+import type { ResizeHandle } from "./HitTester";
 
 type Tool = "select" | "sticky_note" | "text_box" | "shape" | "arrow" | "image";
 
@@ -20,6 +21,18 @@ interface DragState {
   startScreenX: number;
   startScreenY: number;
   elementStartPositions: Map<string, { x: number; y: number }>;
+}
+
+interface ResizeState {
+  isResizing: boolean;
+  handle: ResizeHandle | null;
+  elementId: string | null;
+  startWorldX: number;
+  startWorldY: number;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
 }
 
 export class InputHandler {
@@ -37,6 +50,18 @@ export class InputHandler {
     startScreenX: 0,
     startScreenY: 0,
     elementStartPositions: new Map(),
+  };
+
+  private resize: ResizeState = {
+    isResizing: false,
+    handle: null,
+    elementId: null,
+    startWorldX: 0,
+    startWorldY: 0,
+    startX: 0,
+    startY: 0,
+    startWidth: 0,
+    startHeight: 0,
   };
 
   private isPanning = false;
@@ -136,7 +161,20 @@ export class InputHandler {
             el,
             this.viewport.state.scale,
           );
-          if (handle) return;
+          if (handle) {
+            this.resize = {
+              isResizing: true,
+              handle,
+              elementId: el.id,
+              startWorldX: worldPos.x,
+              startWorldY: worldPos.y,
+              startX: el.x,
+              startY: el.y,
+              startWidth: el.width,
+              startHeight: el.height,
+            };
+            return;
+          }
         }
       }
 
@@ -184,6 +222,65 @@ export class InputHandler {
       useViewportStore.getState().pan(dx, dy);
       this.lastPanX = e.clientX;
       this.lastPanY = e.clientY;
+      this.onDirty();
+      return;
+    }
+
+    if (this.resize.isResizing && this.resize.elementId && this.resize.handle) {
+      const dx = worldPos.x - this.resize.startWorldX;
+      const dy = worldPos.y - this.resize.startWorldY;
+      const { startX, startY, startWidth, startHeight, handle } = this.resize;
+
+      let newX = startX;
+      let newY = startY;
+      let newW = startWidth;
+      let newH = startHeight;
+
+      switch (handle) {
+        case "se":
+          newW = Math.max(40, startWidth + dx);
+          newH = Math.max(40, startHeight + dy);
+          break;
+        case "sw":
+          newX = startX + dx;
+          newW = Math.max(40, startWidth - dx);
+          newH = Math.max(40, startHeight + dy);
+          break;
+        case "ne":
+          newW = Math.max(40, startWidth + dx);
+          newY = startY + dy;
+          newH = Math.max(40, startHeight - dy);
+          break;
+        case "nw":
+          newX = startX + dx;
+          newW = Math.max(40, startWidth - dx);
+          newY = startY + dy;
+          newH = Math.max(40, startHeight - dy);
+          break;
+        case "e":
+          newW = Math.max(40, startWidth + dx);
+          break;
+        case "w":
+          newX = startX + dx;
+          newW = Math.max(40, startWidth - dx);
+          break;
+        case "s":
+          newH = Math.max(40, startHeight + dy);
+          break;
+        case "n":
+          newY = startY + dy;
+          newH = Math.max(40, startHeight - dy);
+          break;
+      }
+
+      getBoardState().updateElement({
+        id: this.resize.elementId,
+        x: newX,
+        y: newY,
+        width: newW,
+        height: newH,
+      });
+
       this.onDirty();
       return;
     }
@@ -237,6 +334,48 @@ export class InputHandler {
         activeTool: getSelectionState().activeTool,
       });
     }
+
+    // update cursor based on what's under the mouse
+    if (!this.drag.isDragging && !this.resize.isResizing && !this.isPanning) {
+      const { elements } = getBoardState();
+      const { selectedIds } = getSelectionState();
+      const scale = this.viewport.state.scale;
+
+      if (selectedIds.size === 1) {
+        const id = Array.from(selectedIds)[0]!;
+        const el = elements[id];
+        if (el) {
+          const handle = this.hitTester.hitTestHandle(
+            worldPos.x,
+            worldPos.y,
+            el,
+            scale,
+          );
+          if (handle) {
+            const cursors: Record<ResizeHandle, string> = {
+              nw: "nw-resize",
+              n: "n-resize",
+              ne: "ne-resize",
+              e: "e-resize",
+              se: "se-resize",
+              s: "s-resize",
+              sw: "sw-resize",
+              w: "w-resize",
+            };
+            this.canvas.style.cursor = cursors[handle];
+            return;
+          }
+        }
+      }
+
+      const hit = this.hitTester.hitTest(
+        worldPos.x,
+        worldPos.y,
+        Object.values(elements),
+        getBoardState().zOrder,
+      );
+      this.canvas.style.cursor = hit ? "move" : "default";
+    }
   };
 
   private onMouseUp = () => {
@@ -257,6 +396,31 @@ export class InputHandler {
 
     this.drag.isDragging = false;
     this.drag.elementStartPositions.clear();
+
+    if (this.resize.isResizing && this.resize.elementId) {
+      const { elements } = getBoardState();
+      const el = elements[this.resize.elementId];
+      if (el) {
+        emitUpdateElement({
+          id: el.id,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+        });
+      }
+      this.resize = {
+        isResizing: false,
+        handle: null,
+        elementId: null,
+        startWorldX: 0,
+        startWorldY: 0,
+        startX: 0,
+        startY: 0,
+        startWidth: 0,
+        startHeight: 0,
+      };
+    }
 
     const { isMarqueeSelecting } = getSelectionState();
     if (isMarqueeSelecting) {

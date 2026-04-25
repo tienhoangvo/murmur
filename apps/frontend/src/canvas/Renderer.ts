@@ -24,6 +24,7 @@ const SELECTION_FILL = "hsl(248 65% 65% / 0.1)";
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private viewport: Viewport;
+  editingId: string | null = null;
 
   constructor(ctx: CanvasRenderingContext2D, viewport: Viewport) {
     this.ctx = ctx;
@@ -142,34 +143,44 @@ export class Renderer {
     ctx.shadowColor = "transparent";
 
     // text
-    ctx.fillStyle = "hsl(220 15% 15%)";
-    ctx.font = `${el.fontSize}px Inter, system-ui, sans-serif`;
-    ctx.textBaseline = "top";
-    this.drawWrappedText(
-      el.content,
-      el.x + 12,
-      el.y + 12,
-      el.width - 24,
-      el.fontSize * 1.4,
-    );
+    if (this.editingId !== el.id) {
+      ctx.fillStyle = "hsl(220 15% 15%)";
+      ctx.font = `${el.fontSize}px Inter, system-ui, sans-serif`;
+      ctx.textBaseline = "top";
+      this.drawWrappedText(
+        el.content,
+        el.x + 12,
+        el.y + 12,
+        el.width - 24,
+        el.fontSize * 1.4,
+      );
+    }
   }
 
   private drawTextBox(el: TextBoxElement) {
     const ctx = this.ctx;
 
-    ctx.fillStyle = el.color;
-    ctx.font = `${el.fontWeight} ${el.fontSize}px Inter, system-ui, sans-serif`;
-    ctx.textAlign = el.align as CanvasTextAlign;
-    ctx.textBaseline = "top";
+    if (this.editingId !== el.id) {
+      ctx.fillStyle = el.color;
+      ctx.font = `${el.fontWeight} ${el.fontSize}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = el.align as CanvasTextAlign;
+      ctx.textBaseline = "top";
 
-    const textX =
-      el.align === "center"
-        ? el.x + el.width / 2
-        : el.align === "right"
-          ? el.x + el.width
-          : el.x;
+      const textX =
+        el.align === "center"
+          ? el.x + el.width / 2
+          : el.align === "right"
+            ? el.x + el.width
+            : el.x;
 
-    this.drawWrappedText(el.content, textX, el.y, el.width, el.fontSize * 1.4);
+      this.drawWrappedText(
+        el.content,
+        textX,
+        el.y,
+        el.width,
+        el.fontSize * 1.4,
+      );
+    }
   }
 
   private drawShape(el: ShapeElement) {
@@ -365,24 +376,55 @@ export class Renderer {
     lineHeight: number,
   ) {
     const ctx = this.ctx;
-    const words = text.split(" ");
-    let line = "";
+    const paragraphs = text.split("\n");
     let currentY = y;
 
-    for (const word of words) {
-      const testLine = line ? `${line} ${word}` : word;
-      const metrics = ctx.measureText(testLine);
-
-      if (metrics.width > maxWidth && line) {
-        ctx.fillText(line, x, currentY);
-        line = word;
+    for (const paragraph of paragraphs) {
+      if (paragraph === "") {
         currentY += lineHeight;
-      } else {
-        line = testLine;
+        continue;
+      }
+
+      const words = paragraph.split(" ");
+      let line = "";
+
+      for (const word of words) {
+        const testLine = line ? `${line} ${word}` : word;
+        const metrics = ctx.measureText(testLine);
+
+        if (metrics.width > maxWidth && line) {
+          ctx.fillText(line, x, currentY);
+          line = word;
+          currentY += lineHeight;
+        } else if (ctx.measureText(word).width > maxWidth) {
+          // word itself is too long — break at character level
+          if (line) {
+            ctx.fillText(line, x, currentY);
+            line = "";
+            currentY += lineHeight;
+          }
+          let chars = "";
+          for (const char of word) {
+            const test = chars + char;
+            if (ctx.measureText(test).width > maxWidth && chars) {
+              ctx.fillText(chars, x, currentY);
+              chars = char;
+              currentY += lineHeight;
+            } else {
+              chars = test;
+            }
+          }
+          line = chars;
+        } else {
+          line = testLine;
+        }
+      }
+
+      if (line) {
+        ctx.fillText(line, x, currentY);
+        currentY += lineHeight;
       }
     }
-
-    if (line) ctx.fillText(line, x, currentY);
   }
 
   private roundRect(x: number, y: number, w: number, h: number, r: number) {

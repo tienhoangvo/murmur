@@ -62,8 +62,7 @@ export class CanvasEngine {
 
   private draw() {
     const { elements, zOrder } = getBoardState();
-    const elementsArray = Array.from(elements.values());
-    this.renderer.render(elementsArray, zOrder);
+    this.renderer.render(Object.values(elements), zOrder);
   }
 
   markDirty() {

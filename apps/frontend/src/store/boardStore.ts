@@ -4,11 +4,10 @@ import type { CanvasElement, ElementUpdate } from "@murmur/shared";
 
 interface BoardState {
   boardId: string | null;
-  elements: Map<string, CanvasElement>;
+  elements: Record<string, CanvasElement>;
   zOrder: string[];
   isDirty: boolean;
 
-  // actions
   setBoard: (boardId: string) => void;
   loadSnapshot: (elements: CanvasElement[]) => void;
   addElement: (element: CanvasElement) => void;
@@ -23,7 +22,7 @@ interface BoardState {
 export const useBoardStore = create<BoardState>()(
   immer((set) => ({
     boardId: null,
-    elements: new Map(),
+    elements: {},
     zOrder: [],
     isDirty: false,
 
@@ -34,7 +33,7 @@ export const useBoardStore = create<BoardState>()(
 
     loadSnapshot: (snapshot) =>
       set((state) => {
-        state.elements = new Map(snapshot.map((el) => [el.id, el]));
+        state.elements = Object.fromEntries(snapshot.map((el) => [el.id, el]));
         state.zOrder = [...snapshot]
           .sort((a, b) => a.zIndex - b.zIndex)
           .map((el) => el.id);
@@ -43,35 +42,32 @@ export const useBoardStore = create<BoardState>()(
 
     addElement: (element) =>
       set((state) => {
-        state.elements.set(element.id, element);
+        state.elements[element.id] = element;
         state.zOrder.push(element.id);
         state.isDirty = true;
       }),
 
     updateElement: (update) =>
       set((state) => {
-        const existing = state.elements.get(update.id);
+        const existing = state.elements[update.id];
         if (!existing) return;
-        state.elements.set(update.id, {
-          ...existing,
-          ...update,
-        } as CanvasElement);
+        state.elements[update.id] = { ...existing, ...update } as CanvasElement;
         state.isDirty = true;
       }),
 
     removeElement: (id) =>
       set((state) => {
-        state.elements.delete(id);
+        delete state.elements[id];
         state.zOrder = state.zOrder.filter((zId: string) => zId !== id);
         state.isDirty = true;
       }),
 
     reorderElement: (id, zIndex) =>
       set((state) => {
-        const el = state.elements.get(id);
+        const el = state.elements[id];
         if (!el) return;
-        state.elements.set(id, { ...el, zIndex } as CanvasElement);
-        state.zOrder = [...state.elements.values()]
+        state.elements[id] = { ...el, zIndex } as CanvasElement;
+        state.zOrder = Object.values(state.elements)
           .sort((a, b) => a.zIndex - b.zIndex)
           .map((el) => el.id);
         state.isDirty = true;
@@ -90,12 +86,11 @@ export const useBoardStore = create<BoardState>()(
     reset: () =>
       set((state) => {
         state.boardId = null;
-        state.elements = new Map();
+        state.elements = {};
         state.zOrder = [];
         state.isDirty = false;
       }),
   })),
 );
 
-// selector for canvas engine — reads outside React
 export const getBoardState = () => useBoardStore.getState();

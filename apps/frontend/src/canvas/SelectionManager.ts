@@ -22,7 +22,7 @@ export class SelectionManager {
     const { elements } = getBoardState();
 
     for (const id of selectedIds) {
-      const el = elements.get(id);
+      const el = elements[id];
       if (!el || el.locked) continue;
 
       const newX = el.x + dx;
@@ -39,7 +39,7 @@ export class SelectionManager {
     const { elements } = getBoardState();
 
     for (const id of selectedIds) {
-      const el = elements.get(id);
+      const el = elements[id];
       if (!el) continue;
 
       const locked = !el.locked;
@@ -53,9 +53,7 @@ export class SelectionManager {
     const { selectedIds } = getSelectionState();
     const { elements } = getBoardState();
 
-    const maxZ = Math.max(
-      ...Array.from(elements.values()).map((e) => e.zIndex),
-    );
+    const maxZ = Math.max(...Object.values(elements).map((e) => e.zIndex));
 
     for (const id of selectedIds) {
       const newZ = maxZ + 1;
@@ -69,9 +67,7 @@ export class SelectionManager {
     const { selectedIds } = getSelectionState();
     const { elements } = getBoardState();
 
-    const minZ = Math.min(
-      ...Array.from(elements.values()).map((e) => e.zIndex),
-    );
+    const minZ = Math.min(...Object.values(elements).map((e) => e.zIndex));
 
     for (const id of selectedIds) {
       const newZ = minZ - 1;
@@ -83,7 +79,7 @@ export class SelectionManager {
   // select all elements
   selectAll() {
     const { elements } = getBoardState();
-    useSelectionStore.getState().selectMany(Array.from(elements.keys()));
+    useSelectionStore.getState().selectMany(Object.keys(elements));
   }
 
   // handle keyboard shortcuts

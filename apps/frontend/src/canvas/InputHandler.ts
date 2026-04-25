@@ -73,7 +73,7 @@ export class InputHandler {
     const worldPos = this.viewport.eventToWorld(e);
     const screenPos = this.viewport.eventToScreen(e);
     const { elements, zOrder } = getBoardState();
-    const elementsArray = Array.from(elements.values());
+    const elementsArray = Object.values(elements);
 
     // middle mouse or space+drag = pan
     if (e.button === 1 || (e.button === 0 && tool === "select" && e.altKey)) {
@@ -89,7 +89,7 @@ export class InputHandler {
       const { selectedIds } = getSelectionState();
       if (selectedIds.size === 1) {
         const selectedId = Array.from(selectedIds)[0]!;
-        const el = elements.get(selectedId);
+        const el = elements[selectedId];
         if (el) {
           const handle = this.hitTester.hitTestHandle(
             worldPos.x,
@@ -126,7 +126,7 @@ export class InputHandler {
         this.drag.startScreenY = screenPos.y;
         this.drag.elementStartPositions = new Map(
           Array.from(getSelectionState().selectedIds).map((id) => {
-            const el = elements.get(id)!;
+            const el = elements[id]!;
             return [id, { x: el.x, y: el.y }];
           }),
         );
@@ -162,7 +162,7 @@ export class InputHandler {
       const { elements } = getBoardState();
 
       for (const [id, startPos] of this.drag.elementStartPositions) {
-        const el = elements.get(id);
+        const el = elements[id];
         if (!el) continue;
         const newX = startPos.x + dx;
         const newY = startPos.y + dy;
@@ -190,7 +190,7 @@ export class InputHandler {
           minY,
           maxX - minX,
           maxY - minY,
-          Array.from(elements.values()),
+          Object.values(elements),
         );
         useSelectionStore.getState().selectMany(ids);
       }
@@ -220,7 +220,7 @@ export class InputHandler {
     if (this.drag.isDragging) {
       const { elements } = getBoardState();
       for (const id of this.drag.elementStartPositions.keys()) {
-        const el = elements.get(id);
+        const el = elements[id];
         if (!el) continue;
         emitUpdateElement({ id, x: el.x, y: el.y });
       }

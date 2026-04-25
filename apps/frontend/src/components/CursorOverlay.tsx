@@ -5,15 +5,14 @@ import styles from "./CursorOverlay.module.css";
 
 export function CursorOverlay() {
   const members = usePresenceStore((s) => s.members);
-  const viewport = useViewportStore((s) => ({
-    x: s.x,
-    y: s.y,
-    scale: s.scale,
-  }));
+  const x = useViewportStore((s) => s.x);
+  const y = useViewportStore((s) => s.y);
+  const scale = useViewportStore((s) => s.scale);
+  const viewport = { x, y, scale };
 
   return (
     <div className={styles.root}>
-      {Array.from(members.values()).map((member) => {
+      {Object.values(members).map((member) => {
         if (!member.cursor) return null;
 
         const screen = worldToScreen(

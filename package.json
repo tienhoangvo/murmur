@@ -1,0 +1,17 @@
+{
+  "name": "murmur",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:be": "pnpm --filter @murmur/backend dev",
+    "dev:fe": "pnpm --filter @murmur/frontend dev",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

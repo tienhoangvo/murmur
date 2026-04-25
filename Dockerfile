@@ -6,7 +6,7 @@ COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY apps/backend/package.json ./apps/backend/package.json
 
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN npm install -g pnpm && pnpm install --no-frozen-lockfile
 
 COPY packages/shared ./packages/shared
 COPY apps/backend ./apps/backend
